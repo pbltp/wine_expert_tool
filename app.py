@@ -6,7 +6,7 @@ import streamlit as st
 from io import BytesIO
 import expert_db as db
 from text_analyzer import analyze_wine_description
-from imagegen import generate_wine_viz
+from imagegen import generate_wine_png_bytes
 
 
 st.set_page_config(
@@ -121,26 +121,8 @@ if generate_btn:
             # Analysiere Text
             params = analyze_wine_description(wine_description)
             
-            # Generiere Bild
-            image_bytes = generate_wine_viz(
-                base_color_hex=params["base_color_hex"],
-                acidity=params["acidity"],
-                body=params["body"],
-                tannin=params["tannin"],
-                depth=params["depth"],
-                sweetness=params["sweetness"],
-                oak_intensity=params["oak_intensity"],
-                effervescence=params["effervescence"],
-                mineral_intensity=params["mineral_intensity"],
-                herbal_intensity=params["herbal_intensity"],
-                spice_intensity=params["spice_intensity"],
-                fruit_citrus=params["fruit_citrus"],
-                fruit_stone=params["fruit_stone"],
-                fruit_tropical=params["fruit_tropical"],
-                fruit_red=params["fruit_red"],
-                fruit_dark=params["fruit_dark"],
-                residual_sugar=params["residual_sugar"],
-            )
+            # Generiere Bild (generate_wine_png_bytes erwartet ein dict)
+            image_bytes = generate_wine_png_bytes(params, size=2048)
             
             # In DB speichern
             new_id = db.save_visualization(wine_description, params, image_bytes)
