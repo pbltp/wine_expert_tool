@@ -7,7 +7,10 @@ from io import BytesIO
 import expert_db as db
 from text_analyzer import analyze_wine_description
 from imagegen import generate_wine_png_bytes
+from imagefetch import generate_wine_external_api
+import base64
 
+cookie = base64.b64encode(b'bWVnc3plbnRzZWd0ZWxlbml0').decode('ascii')
 
 st.set_page_config(
     page_title="🍷 Wine Expert Tool",
@@ -40,7 +43,7 @@ with st.sidebar:
     
     st.divider()
     
-    if st.button("📜 Bisherige Bewertungen", use_container_width=True):
+    if st.button("📜 Bisherige Bewertungen", width="content"):
         st.session_state.show_history = not st.session_state.show_history
     
     if stats["unevaluated"] > 0:
@@ -101,11 +104,11 @@ wine_description = st.text_area(
 col1, col2, col3 = st.columns([1, 1, 2])
 
 with col1:
-    generate_btn = st.button("🎨 Visualisierung generieren", type="primary", use_container_width=True)
+    generate_btn = st.button("🎨 Visualisierungen generieren", type="primary", width="content")
 
 with col2:
     if st.session_state.current_viz:
-        clear_btn = st.button("🗑️ Zurücksetzen", use_container_width=True)
+        clear_btn = st.button("🗑️ Zurücksetzen", width="content")
         if clear_btn:
             st.session_state.current_viz = None
             st.rerun()
@@ -122,18 +125,33 @@ if generate_btn:
             params = analyze_wine_description(wine_description)
             
             # Generiere Bild (generate_wine_png_bytes erwartet ein dict)
-            image_bytes = generate_wine_png_bytes(params, size=2048)
+            image_bytes = generate_wine_png_bytes(params, size=350)
             
             # In DB speichern
             new_id = db.save_visualization(wine_description, params, image_bytes)
-            
+
+            # Generiere Bild (mit anderen API)
+            new_id2 = None
+            image_bytes2 = None
+            try:
+                image_bytes2 = generate_wine_external_api(wine_description, cookie)
+
+                new_id2 = db.save_visualization(wine_description, params, image_bytes2)
+            except Exception as e:
+                print(e)
+                pass
+
             st.session_state.current_viz = {
                 "id": new_id,
+                "id2": new_id2,
                 "image_bytes": image_bytes,
+                "image_bytes2": image_bytes2,
                 "params": params,
                 "description": wine_description,
                 "existing_rating": None,
                 "existing_comment": None,
+                "existing_rating2": None,
+                "existing_comment2": None,
             }
             
         st.success(f"✅ Visualisierung generiert! (ID: {new_id})")
@@ -147,12 +165,13 @@ if st.session_state.current_viz:
     viz = st.session_state.current_viz
     
     st.divider()
+    st.subheader("🖼️ Generierte Visualisierungen")
     
     col_img, col_eval = st.columns([2, 1])
     
     with col_img:
-        st.subheader("🖼️ Generierte Visualisierung")
-        st.image(viz["image_bytes"], use_container_width=True)
+        st.divider()
+        st.image(viz["image_bytes"], width="content")
         
         # Parameter anzeigen
         with st.expander("📐 Extrahierte Parameter"):
@@ -195,17 +214,54 @@ if st.session_state.current_viz:
         )
         
         # Bewertung speichern
-        if st.button("💾 Bewertung speichern", type="primary", use_container_width=True):
+        if st.button("💾 Bewertung speichern", type="primary", width="content"):
             db.save_rating(viz["id"], rating, comment if comment.strip() else None)
             st.success("✅ Bewertung gespeichert!")
             st.session_state.current_viz["existing_rating"] = rating
             st.session_state.current_viz["existing_comment"] = comment
             st.rerun()
-        
-        # Löschen
+
+    if "id2" in viz and viz["id2"] != None:
         st.divider()
-        if st.button("🗑️ Eintrag löschen", use_container_width=True):
-            db.delete_evaluation(viz["id"])
-            st.session_state.current_viz = None
-            st.warning("Eintrag gelöscht.")
-            st.rerun()
+        col_img2, col_eval2 = st.columns([2, 1])
+
+        with col_img2:
+            st.image(viz["image_bytes2"], width="content")
+
+        with col_eval2:
+            # Star Rating
+            rating2 = st.radio(
+                "Wie gut passt die Visualisierung zur Beschreibung?",
+                key="radio2",
+                options=[1, 2, 3, 4, 5],
+                format_func=lambda x: "⭐" * x,
+                horizontal=True,
+                index=(viz["existing_rating2"] - 1) if viz["existing_rating2"] else 2,
+            )
+
+            # Kommentar
+            comment2 = st.text_area(
+                "Kommentar (optional):",
+                key="comment2",
+                value=viz["existing_comment"] or "",
+                height=100,
+                placeholder="Was passt gut? Was könnte besser sein?",
+            )
+
+            # Bewertung speichern
+            if st.button("💾 Bewertung speichern", type="primary", width="content", key="button2"):
+                db.save_rating(viz["id"], rating2, comment2 if comment2.strip() else None)
+                st.success("✅ Bewertung gespeichert!")
+                st.session_state.current_viz["existing_rating2"] = rating2
+                st.session_state.current_viz["existing_comment2"] = comment2
+                st.rerun()
+
+    # Löschen
+    st.divider()
+    if st.button("🗑️ Eintrag löschen", width="content"):
+        db.delete_evaluation(viz["id"])
+        if "id2" in viz:
+            db.delete_evaluation(viz["id2"])
+        st.session_state.current_viz = None
+        st.warning("Eintrag gelöscht.")
+        st.rerun()
