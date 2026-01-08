@@ -250,7 +250,7 @@ if st.session_state.current_viz:
 
             # Bewertung speichern
             if st.button("💾 Bewertung speichern", type="primary", width="content", key="button2"):
-                db.save_rating(viz["id"], rating2, comment2 if comment2.strip() else None)
+                db.save_rating(viz["id2"], rating2, comment2 if comment2.strip() else None)
                 st.success("✅ Bewertung gespeichert!")
                 st.session_state.current_viz["existing_rating2"] = rating2
                 st.session_state.current_viz["existing_comment2"] = comment2
